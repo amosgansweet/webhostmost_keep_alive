@@ -1,0 +1,39 @@
+name: Webhostmost Login and Status Check
+
+on:
+  schedule:
+    - cron: '0 0 */10 * *'  # Runs every 10 days at 00:00 UTC
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  login_and_check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Install dependencies
+        run: npm install puppeteer cheerio
+
+      - name: Run login and status check script
+        env:
+          WEBHOSTMOST_USERNAME: ${{ secrets.WEBHOSTMOST_USERNAME }}
+          WEBHOSTMOST_PASSWORD: ${{ secrets.WEBHOSTMOST_PASSWORD }}
+        run: node webhostmost_check.js
+
+      - name: Send Status Update (Optional - Adjust as needed)
+        if: always() # Run regardless of success/failure above
+        run: |
+          echo "STATUS_MESSAGE=$(cat status.txt)" >> $GITHUB_ENV
+        continue-on-error: true # Don't fail on error (e.g., if sending fails)
+
+      - name: Output Status
+        run: echo "${{ env.STATUS_MESSAGE }}"
+        continue-on-error: true
+
