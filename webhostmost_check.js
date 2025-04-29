@@ -19,20 +19,38 @@ const fs = require('fs').promises;
   try {
     browser = await puppeteer.launch({
       headless: "new", // Run in headless mode (no GUI)
-      args: ['--no-sandbox', '--disable-setuid-sandbox'], // Required for running in GitHub Actions
-      ignoreDefaultArgs: ['--enable-automation'],  //Try to avoid detection
-      // executablePath: '/usr/bin/chromium-browser' // Specify Chromium path if needed in GH Actions
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-web-security', // Important for bypassing some CORS issues
+        '--disable-features=IsolateOrigins', //Related to web security
+        '--disable-site-isolation-trials', //Related to web security
+      ],
+      ignoreDefaultArgs: ['--enable-automation'], // Try to avoid detection
+      // executablePath: '/usr/bin/chromium-browser', // Specify Chromium path if needed in GH Actions
     });
 
     const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 800 }); // Set viewport
 
-    // Simulate private browsing (although it might not be fully effective)
-    const cookies = []; // Start with empty cookies
-    await page.setCookie(...cookies); // Clear cookies before login
+    //Emulate a real browser as closely as possible
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    await page.setViewport({ width: 1280, height: 800 }); // Set viewport
+    await page.evaluateOnNewDocument(() => {
+      // Pass webdriver check
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => false,
+      });
+    });
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+    });
+
+    // Simulate private browsing (more aggressively)
+    await page.deleteCookie(...await page.cookies()); // Clear all cookies
+    await page.setCacheEnabled(false); // Disable caching
 
     // 1. Go to the login page
-    await page.goto(url);
+    await page.goto(url, { waitUntil: 'networkidle2' }); // Wait for navigation
 
     // 2. Fill in the login form
     await page.type('input[name="email"]', username); // Adjust selector if needed
