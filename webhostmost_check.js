@@ -7,6 +7,8 @@ const fs = require('fs').promises;
   const password = process.env.WEBHOSTMOST_PASSWORD;
   const url = 'https://client.webhostmost.com/clientarea.php';
 
+  let loginSuccessful = false; // Track login status
+
   if (!username || !password) {
     console.error('Error: WEBHOSTMOST_USERNAME and WEBHOSTMOST_PASSWORD environment variables must be set.');
     await fs.writeFile('status.txt', 'Error: Missing credentials.');
@@ -36,6 +38,8 @@ const fs = require('fs').promises;
       page.waitForNavigation({ waitUntil: 'networkidle2' }), // Wait for navigation
     ]);
 
+    loginSuccessful = true; // Login was successful
+
     // 4. Extract the HTML content after login
     const content = await page.content();
 
@@ -58,11 +62,36 @@ const fs = require('fs').promises;
     await fs.writeFile('status.txt', `Hosting Plan Status: ${status}`);  // Save status to file
 
   } catch (error) {
+    loginSuccessful = false; // Login failed due to an error
     console.error('An error occurred:', error);
     await fs.writeFile('status.txt', `Error: ${error.message}`);
   } finally {
     if (browser) {
       await browser.close();
     }
+
+    // Construct the status message
+    let statusMessage = "Webhostmost Status: ";
+    if (loginSuccessful) {
+      statusMessage += "Login successful. Hosting Plan Status is ";
+      try {
+        const statusFromFile = await fs.readFile('status.txt', 'utf8');
+        statusMessage += statusFromFile;
+      } catch (readError) {
+        statusMessage += "Unknown (Error reading status file)";
+        console.error("Error reading status file:", readError);
+      }
+    } else {
+      statusMessage += "Login failed. Please check your credentials or the website.";
+    }
+
+    // Write the final status message to status.txt
+    try {
+      await fs.writeFile('status.txt', statusMessage);
+      console.log("Final Status Message:", statusMessage);  // Log the message
+    } catch (writeError) {
+      console.error("Error writing final status to file:", writeError);
+    }
+
   }
 })();
