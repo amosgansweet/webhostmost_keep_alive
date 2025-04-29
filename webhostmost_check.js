@@ -5,8 +5,7 @@ const fs = require('fs').promises;
 (async () => {
   const username = process.env.WEBHOSTMOST_USERNAME;
   const password = process.env.WEBHOSTMOST_PASSWORD;
-  const url = 'https://client.webhostmost.com/clientarea.php';
-
+  const url = 'https://client.webhostmost.com/login'; //Corrected URL
   let loginSuccessful = false; // Track login status
 
   if (!username || !password) {
@@ -49,16 +48,15 @@ const fs = require('fs').promises;
     await page.deleteCookie(...await page.cookies()); // Clear all cookies
     await page.setCacheEnabled(false); // Disable caching
 
-    // 1. Go to the login page
+    // 1. Go to the login page (Corrected URL)
     await page.goto(url, { waitUntil: 'networkidle2' }); // Wait for navigation
 
-    // 2. Fill in the login form
-    await page.type('input[name="email"]', username); // Adjust selector if needed
-    await page.type('input[name="password"]', password); // Adjust selector if needed
-
+    // 2. Fill in the login form (CORRECTED SELECTORS)
+    await page.type('input[placeholder="Email Address"]', username); // Adjust selector if needed
+    await page.type('input[placeholder="Password"]', password); // Adjust selector if needed
     // 3. Click the login button
     await Promise.all([
-      page.click('button[type="submit"]'), // Adjust selector if needed
+      page.click('button:contains("Login")'), // Adjust selector if needed
       page.waitForNavigation({ waitUntil: 'networkidle2' }), // Wait for navigation
     ]);
 
@@ -70,18 +68,18 @@ const fs = require('fs').promises;
     // 5. Use Cheerio to parse the HTML
     const $ = cheerio.load(content);
 
-    // 6. Extract the "Time until suspension"
-    let suspensionTime = 'Not Found';
-    const suspensionElement = $('div:contains("Time until suspension:")');
+    // 6. Extract the "Time until suspension" (Adjusted selector to new page)
+      let suspensionTime = 'Not Found';
+      const suspensionElement = $('div:contains("Time until suspension:")');
 
-    if (suspensionElement.length > 0) {
-      // Extract the text and split it to get the time
-      const fullText = suspensionElement.text();
-      const parts = fullText.split(':');
-      if (parts.length > 1) {
-        suspensionTime = parts[1].trim(); // Get the part after "Time until suspension:"
+      if (suspensionElement.length > 0) {
+        // Extract the text and split it to get the time
+        const fullText = suspensionElement.text();
+        const parts = fullText.split(':');
+        if (parts.length > 1) {
+          suspensionTime = parts[1].trim(); // Get the part after "Time until suspension:"
+        }
       }
-    }
 
     console.log(`Time until suspension: ${suspensionTime}`);
     await fs.writeFile('status.txt', `Time until suspension: ${suspensionTime}`);  // Save status to file
