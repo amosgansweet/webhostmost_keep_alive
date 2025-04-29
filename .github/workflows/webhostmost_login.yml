@@ -33,7 +33,23 @@ jobs:
           echo "STATUS_MESSAGE=$(cat status.txt)" >> $GITHUB_ENV
         continue-on-error: true # Don't fail on error (e.g., if sending fails)
 
+      - name: Send Telegram Notification
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -n "${TELEGRAM_BOT_TOKEN}" ] && [ -n "${TELEGRAM_CHAT_ID}" ]; then
+            MESSAGE="${{ env.STATUS_MESSAGE }}"
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d chat_id="${TELEGRAM_CHAT_ID}" \
+              -d text="$MESSAGE" \
+              -d disable_web_page_preview="true"
+          else
+            echo "Telegram bot token or chat ID not set. Skipping Telegram notification."
+          fi
+        continue-on-error: true
+
       - name: Output Status
         run: echo "${{ env.STATUS_MESSAGE }}"
         continue-on-error: true
-
