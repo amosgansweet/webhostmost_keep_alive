@@ -57,7 +57,12 @@ const fs = require('fs').promises;
     const suspensionElement = $('div:contains("Time until suspension:")');
 
     if (suspensionElement.length > 0) {
-      suspensionTime = suspensionElement.text().replace('Time until suspension:', '').trim();
+      // Extract the text and split it to get the time
+      const fullText = suspensionElement.text();
+      const parts = fullText.split(':');
+      if (parts.length > 1) {
+        suspensionTime = parts[1].trim(); // Get the part after "Time until suspension:"
+      }
     }
 
     console.log(`Time until suspension: ${suspensionTime}`);
