@@ -20,10 +20,16 @@ const fs = require('fs').promises;
     browser = await puppeteer.launch({
       headless: "new", // Run in headless mode (no GUI)
       args: ['--no-sandbox', '--disable-setuid-sandbox'], // Required for running in GitHub Actions
+      ignoreDefaultArgs: ['--enable-automation'],  //Try to avoid detection
+      // executablePath: '/usr/bin/chromium-browser' // Specify Chromium path if needed in GH Actions
     });
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 }); // Set viewport
+
+    // Simulate private browsing (although it might not be fully effective)
+    const cookies = []; // Start with empty cookies
+    await page.setCookie(...cookies); // Clear cookies before login
 
     // 1. Go to the login page
     await page.goto(url);
@@ -46,20 +52,16 @@ const fs = require('fs').promises;
     // 5. Use Cheerio to parse the HTML
     const $ = cheerio.load(content);
 
-    // 6. Find the element containing the status
-    //  This selector is based on the image you provided.  Inspect the page
-    //  source in your browser and adjust the selector if it changes.
-    let statusElement = $('div:contains("Your Hosting Plans")').next().find('div:contains("Active")'); // Adjust the selector.  Be specific!
-    let status = 'Not Found';
+    // 6. Extract the "Time until suspension"
+    let suspensionTime = 'Not Found';
+    const suspensionElement = $('div:contains("Time until suspension:")');
 
-    if (statusElement.length > 0) {
-      status = 'Active';
-    } else {
-      status = 'Inactive';
+    if (suspensionElement.length > 0) {
+      suspensionTime = suspensionElement.text().replace('Time until suspension:', '').trim();
     }
 
-    console.log(`Hosting Plan Status: ${status}`);
-    await fs.writeFile('status.txt', `Hosting Plan Status: ${status}`);  // Save status to file
+    console.log(`Time until suspension: ${suspensionTime}`);
+    await fs.writeFile('status.txt', `Time until suspension: ${suspensionTime}`);  // Save status to file
 
   } catch (error) {
     loginSuccessful = false; // Login failed due to an error
@@ -73,7 +75,7 @@ const fs = require('fs').promises;
     // Construct the status message
     let statusMessage = "Webhostmost Status: ";
     if (loginSuccessful) {
-      statusMessage += "Login successful. Hosting Plan Status is ";
+      statusMessage += "Login successful. Time until suspension: ";
       try {
         const statusFromFile = await fs.readFile('status.txt', 'utf8');
         statusMessage += statusFromFile;
