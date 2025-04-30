@@ -1,7 +1,7 @@
-const puppeteer = require('puppeteer'); 
+const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const fs = require('fs');
-const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 
 (async () => {
   const username = process.env.WEBHOSTMOST_USERNAME;
@@ -11,32 +11,40 @@ const path = require('path');
 
   if (!username || !password) {
     statusMessage = 'Error: Missing credentials.';
-    console.log(`status=${statusMessage}`); // fallback
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `status=${statusMessage}\n`);
-    return;
+    fs.appendFileSync(process.env.GITHUB_ENV, `STATUS=${statusMessage}\n`);
+    process.exit(1);
   }
 
   let browser;
   try {
     browser = await puppeteer.launch({
-      headless: "new",
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins',
+        '--disable-site-isolation-trials',
+      ],
+      ignoreDefaultArgs: ['--enable-automation'],
     });
 
     const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0');
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
     await page.goto(url, { waitUntil: 'networkidle2' });
 
     const token = await page.evaluate(() => {
       const tokenInput = document.querySelector('input[name="token"]');
       return tokenInput ? tokenInput.value : null;
     });
+
     if (!token) throw new Error('CSRF token not found');
 
     await page.type('input[name="username"]', username);
     await page.type('input[name="password"]', password);
 
     const formData = `token=${token}&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+
     await Promise.all([
       page.evaluate((formData) => {
         const form = document.createElement('form');
@@ -62,12 +70,15 @@ const path = require('path');
     const content = await page.content();
     const $ = cheerio.load(content);
 
-    let suspensionText = $('*')
-      .filter((i, el) => $(el).text().includes("Time until suspension:"))
-      .first()
-      .text();
-
-    let suspensionTime = suspensionText.split("Time until suspension:")[1]?.trim() || "Not Found";
+    let suspensionTime = 'Not Found';
+    const suspensionElement = $('div:contains("Time until suspension:")').first();
+    if (suspensionElement.length > 0) {
+      const textOnly = suspensionElement.clone().children().remove().end().text();
+      const match = textOnly.match(/Time until suspension:\s*(.+)/);
+      if (match && match[1]) {
+        suspensionTime = match[1].trim();
+      }
+    }
 
     statusMessage = `Login successful. Time until suspension: ${suspensionTime}`;
   } catch (err) {
@@ -75,7 +86,8 @@ const path = require('path');
   } finally {
     if (browser) await browser.close();
     statusMessage = statusMessage.replace(/[\r\n\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').trim();
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `status=${statusMessage}\n`);
-    console.log(`status=${statusMessage}`);
+    statusMessage = statusMessage.slice(0, 1000); // 防止超长
+
+    fs.appendFileSync(process.env.GITHUB_ENV, `STATUS=${statusMessage}\n`);
   }
 })();
