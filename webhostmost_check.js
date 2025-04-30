@@ -12,7 +12,7 @@ const fs = require('fs').promises;  // Import fs.promises
   if (!username || !password) {
     console.error('Error: WEBHOSTMOST_USERNAME and WEBHOSTMOST_PASSWORD environment variables must be set.');
     statusMessage = 'Error: Missing credentials.';
-    await fs.writeFile('status.txt', statusMessage);  // Write to file
+    await fs.writeFile('status.txt', statusMessage);  // Write to file AND AWAIT
     return;
   }
 
@@ -114,6 +114,6 @@ const fs = require('fs').promises;  // Import fs.promises
     statusMessage = statusMessage.replace(/[\r\n\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''); // Sanitize
     statusMessage = statusMessage.trim(); // Trim
 
-    await fs.writeFile('status.txt', statusMessage);  // Write to file
+    await fs.writeFile('status.txt', statusMessage);  // Write to file AND AWAIT
   }
 })();
