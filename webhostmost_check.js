@@ -7,10 +7,12 @@ const fs = require('fs').promises;
   const password = process.env.WEBHOSTMOST_PASSWORD;
   const url = 'https://client.webhostmost.com/login';
   let loginSuccessful = false;
+  let statusMessage = "Webhostmost Status: "; // Initialize here
 
   if (!username || !password) {
     console.error('Error: WEBHOSTMOST_USERNAME and WEBHOSTMOST_PASSWORD environment variables must be set.');
-    await fs.writeFile('status.txt', 'Error: Missing credentials.');
+    statusMessage = 'Error: Missing credentials.'; // Set status message
+    await fs.writeFile('status.txt', statusMessage);
     return;
   }
 
@@ -109,20 +111,21 @@ const fs = require('fs').promises;
     }
 
     console.log(`Time until suspension: ${suspensionTime}`);
-    await fs.writeFile('status.txt', `Time until suspension: ${suspensionTime}`);
-
+    statusMessage = `Time until suspension: ${suspensionTime}`; // Update status message
+    await fs.writeFile('status.txt', statusMessage); // Write to file
   } catch (error) {
     loginSuccessful = false;
     console.error('An error occurred:', error);
-    await fs.writeFile('status.txt', `Error: ${error.message}`);
+    statusMessage = `Error: ${error.message}`; // Update status message
+    await fs.writeFile('status.txt', statusMessage); // Write to file
   } finally {
     if (browser) {
       await browser.close();
     }
 
-    let statusMessage = "Webhostmost Status: ";
+
     if (loginSuccessful) {
-      statusMessage += "Login successful. Time until suspension: ";
+      statusMessage = "Webhostmost Status: Login successful. Time until suspension: "; // Reset status message
       try {
         const statusFromFile = await fs.readFile('status.txt', 'utf8');
         statusMessage += statusFromFile;
@@ -131,7 +134,7 @@ const fs = require('fs').promises;
         console.error("Error reading status file:", readError);
       }
     } else {
-      statusMessage += "Login failed. Please check your credentials or the website.";
+      statusMessage = "Webhostmost Status: Login failed. Please check your credentials or the website."; // Reset status message
     }
 
     try {
