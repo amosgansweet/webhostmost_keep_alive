@@ -18,7 +18,19 @@ jobs:
         with:
           node-version: '20.x'
 
+      - name: Cache node modules
+        id: cache-npm
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-node-modules
+        with:
+          path: ${{ github.workspace }}/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Install dependencies
+        if: ${{ steps.cache-npm.outputs.cache-hit != 'true' }}
         run: |
           npm install puppeteer@latest cheerio
           echo "Puppeteer version: $(npm list puppeteer)" # Output Puppeteer version
@@ -36,7 +48,7 @@ jobs:
         run: |
           STATUS_MESSAGE=$(cat status.txt)
           if [ -n "${TELEGRAM_BOT_TOKEN}" ] && [ -n "${TELEGRAM_CHAT_ID}" ]; then
-            MESSAGE="Webhostmost Status: $STATUS_MESSAGE"  # Added "Webhostmost Status:" prefix
+            MESSAGE="Webhostmost Status: $STATUS_MESSAGE"
             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               -d chat_id="${TELEGRAM_CHAT_ID}" \
               -d text="$MESSAGE" \
