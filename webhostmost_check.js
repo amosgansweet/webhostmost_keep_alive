@@ -13,7 +13,6 @@ const { v4: uuidv4 } = require('uuid');
   if (!username || !password) {
     console.error('Error: WEBHOSTMOST_USERNAME and WEBHOSTMOST_PASSWORD environment variables must be set.');
     statusMessage = 'Error: Missing credentials.';
-    //console.log(`::set-output name=status::${statusMessage}`); // Remove set-output
 
     // Generate a random filename
     const randomFileName = uuidv4();
@@ -21,8 +20,8 @@ const { v4: uuidv4 } = require('uuid');
     // Write the status to the file
     fs.writeFileSync(randomFileName, `status=${statusMessage}`);
 
-    // Set the GITHUB_ENV variable
-    console.log(`::set-env name=GITHUB_ENV::$${randomFileName}`);
+    // Append the file path to GITHUB_ENV using proper syntax
+    console.log(`::append-to-file GITHUB_ENV::${randomFileName}`);
 
     return;
   }
@@ -124,15 +123,13 @@ const { v4: uuidv4 } = require('uuid');
     statusMessage = statusMessage.replace(/[\r\n\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''); // Sanitize
     statusMessage = statusMessage.trim(); // Trim
 
-    //console.log(`::set-output name=status::${statusMessage}`); // Remove set-output
-
     // Generate a random filename
     const randomFileName = uuidv4();
 
     // Write the status to the file
     fs.writeFileSync(randomFileName, `status=${statusMessage}`);
 
-    // Set the GITHUB_ENV variable
-    console.log(`::set-env name=GITHUB_ENV::$${randomFileName}`);
+    // Append the file path to GITHUB_ENV using proper syntax
+    console.log(`::append-to-file GITHUB_ENV::${randomFileName}`);
   }
 })();
