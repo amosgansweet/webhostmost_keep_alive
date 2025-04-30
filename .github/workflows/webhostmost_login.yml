@@ -22,7 +22,7 @@ jobs:
         run: npm install puppeteer cheerio uuid
 
       - name: Run login and status check script
-        id: run_login_and_check_script
+        id: run_check
         env:
           WEBHOSTMOST_USERNAME: ${{ secrets.WEBHOSTMOST_USERNAME }}
           WEBHOSTMOST_PASSWORD: ${{ secrets.WEBHOSTMOST_PASSWORD }}
@@ -34,19 +34,16 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          MESSAGE="${{ env.status }}"
-          if [ -n "${TELEGRAM_BOT_TOKEN}" ] && [ -n "${TELEGRAM_CHAT_ID}" ]; then
+          MESSAGE="${{ steps.run_check.outputs.status }}"
+          if [ -n "$MESSAGE" ] && [ -n "${TELEGRAM_BOT_TOKEN}" ] && [ -n "${TELEGRAM_CHAT_ID}" ]; then
             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               -d chat_id="${TELEGRAM_CHAT_ID}" \
               -d text="$MESSAGE" \
               -d disable_web_page_preview="true"
           else
-            echo "Telegram bot token or chat ID not set. Skipping Telegram notification."
+            echo "Missing Telegram config or empty message. Skipping notification."
           fi
         continue-on-error: true
-        id: send_telegram_notification
 
       - name: Output Status
-        run: echo "${{ env.status }}"
-        id: output_status
-        continue-on-error: true
+        run: echo "${{ steps.run_check.outputs.status }}"
