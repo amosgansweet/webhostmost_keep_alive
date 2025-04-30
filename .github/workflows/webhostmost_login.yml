@@ -7,7 +7,7 @@ on:
 
 jobs:
   login_and_check:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest  # Try a different runner
 
     steps:
       - name: Checkout repository
@@ -18,12 +18,24 @@ jobs:
         with:
           node-version: '20.x'  # Or a more recent version
 
-      - name: Clean install
-        run: rm -rf node_modules
+      - name: Cache node modules
+        id: cache-npm
+        uses: actions/cache@v3
+        pull-request-number: 0
+        env:
+          cache-name: cache-node-modules
+          cache-key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        with:
+          path: ${{ github.workspace }}/node_modules
+          key: ${{ env.cache-key }}
+          restore-keys: |
+            ${{ env.cache-key }}
+            ${{ runner.os }}-node-
 
       - name: Install dependencies (Force update Puppeteer)
+        if: ${{ steps.cache-npm.outputs.cache-hit != 'true' }}
         run: |
-          npm install puppeteer@22.5.0 cheerio # Or a more recent version
+          npm install puppeteer@latest cheerio
           echo "Puppeteer version: $(npm list puppeteer)" # Output Puppeteer version
 
       - name: Debug - Output Environment Variables
@@ -56,7 +68,7 @@ jobs:
         run: |
           STATUS_MESSAGE=$(cat status.txt) # Set environment variable using shell syntax
           if [ -n "${TELEGRAM_BOT_TOKEN}" ] && [ -n "${TELEGRAM_CHAT_ID}" ]; then
-            MESSAGE="$STATUS_MESSAGE"
+                MESSAGE="$STATUS_MESSAGE"
             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               -d chat_id="${TELEGRAM_CHAT_ID}" \
               -d text="$MESSAGE" \
