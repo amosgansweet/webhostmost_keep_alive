@@ -28,8 +28,9 @@ jobs:
           WEBHOSTMOST_PASSWORD: ${{ secrets.WEBHOSTMOST_PASSWORD }}
         run: |
           node webhostmost_check.js
-          STATUS=$(cat status.txt)
-          echo "status=$STATUS" >> $GITHUB_OUTPUT
+
+      - name: Wait for a second (to ensure file is written)  # ADDED DELAY
+        run: sleep 1
 
       - name: Send Telegram Notification
         if: always()
@@ -37,7 +38,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          MESSAGE="${{ env.status }}"
+          STATUS=$(cat status.txt)  # Read status.txt *here*
+          MESSAGE="$STATUS"
           if [ -n "${TELEGRAM_BOT_TOKEN}" ] && [ -n "${TELEGRAM_CHAT_ID}" ]; then
             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               -d chat_id="${TELEGRAM_CHAT_ID}" \
@@ -50,6 +52,8 @@ jobs:
         id: send_telegram_notification
 
       - name: Output Status
-        run: echo "${{ env.status }}"
+        run: |
+          STATUS=$(cat status.txt) # Read status.txt *here*
+          echo "$STATUS"
         id: output_status
         continue-on-error: true
