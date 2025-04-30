@@ -11,21 +11,22 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3  # Downgraded to v3
+        uses: actions/checkout@v3
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3  # Downgraded to v3
+        uses: actions/setup-node@v3
         with:
-          node-version: '20.x'
+          node-version: '20.x'  # Or a more recent version
 
       - name: Install dependencies
-        run: npm install puppeteer cheerio
+        run: |
+          npm install puppeteer@latest cheerio  # Install the latest version of Puppeteer
 
       - name: Run login and status check script
         env:
           WEBHOSTMOST_USERNAME: ${{ secrets.WEBHOSTMOST_USERNAME }}
           WEBHOSTMOST_PASSWORD: ${{ secrets.WEBHOSTMOST_PASSWORD }}
-        run: node webhostmost_check.js  # Remove continue-on-error temporarily
+        run: node webhostmost_check.js
 
       - name: Send Status Update (Optional - Adjust as needed)
         if: always() # Run regardless of success/failure above
