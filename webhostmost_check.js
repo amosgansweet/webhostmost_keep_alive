@@ -1,93 +1,60 @@
 const puppeteer = require('puppeteer');
-const cheerio = require('cheerio');
-const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
+const TelegramBot = require('node-telegram-bot-api');
+
+const username = process.env.WEBHOSTMOST_USERNAME;
+const password = process.env.WEBHOSTMOST_PASSWORD;
+const telegramToken = process.env.TELEGRAM_TOKEN;
+const telegramChatId = process.env.TELEGRAM_CHAT_ID;
 
 (async () => {
-  const username = process.env.WEBHOSTMOST_USERNAME;
-  const password = process.env.WEBHOSTMOST_PASSWORD;
-  const url = 'https://client.webhostmost.com/login';
-  let statusMessage = "Webhostmost Status: ";
+  const browser = await puppeteer.launch({ headless: 'new' });
+  const page = await browser.newPage();
 
-  if (!username || !password) {
-    statusMessage = 'Error: Missing credentials.';
-    fs.appendFileSync(process.env.GITHUB_ENV, `STATUS=${statusMessage}\n`);
-    process.exit(1);
-  }
-
-  let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins',
-        '--disable-site-isolation-trials',
-      ],
-      ignoreDefaultArgs: ['--enable-automation'],
-    });
+    // 访问登录页
+    await page.goto('https://client.webhostmost.com/login.php', { waitUntil: 'networkidle2' });
 
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
-    await page.goto(url, { waitUntil: 'networkidle2' });
-
-    const token = await page.evaluate(() => {
-      const tokenInput = document.querySelector('input[name="token"]');
-      return tokenInput ? tokenInput.value : null;
-    });
-
-    if (!token) throw new Error('CSRF token not found');
-
+    // 填写登录表单
     await page.type('input[name="username"]', username);
     await page.type('input[name="password"]', password);
-
-    const formData = `token=${token}&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-
     await Promise.all([
-      page.evaluate((formData) => {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/login';
-        form.style.display = 'none';
-
-        const params = new URLSearchParams(formData);
-        for (const [key, value] of params) {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = key;
-          input.value = value;
-          form.appendChild(input);
-        }
-
-        document.body.appendChild(form);
-        form.submit();
-      }, formData),
+      page.click('button[type="submit"]'),
       page.waitForNavigation({ waitUntil: 'networkidle2' }),
     ]);
 
-    const content = await page.content();
-    const $ = cheerio.load(content);
+    // 访问 clientarea 页面
+    await page.goto('https://client.webhostmost.com/clientarea.php', { waitUntil: 'networkidle2' });
 
-    let suspensionTime = 'Not Found';
-    const suspensionElement = $('div:contains("Time until suspension:")').first();
-    if (suspensionElement.length > 0) {
-      const textOnly = suspensionElement.clone().children().remove().end().text();
-      const match = textOnly.match(/Time until suspension:\s*(.+)/);
-      if (match && match[1]) {
-        suspensionTime = match[1].trim();
-      }
+    // 等待倒计时 DOM 出现
+    await page.waitForSelector('#custom-timer', { timeout: 10000 });
+
+    // 提取倒计时内容
+    const suspensionTime = await page.evaluate(() => {
+      const days = document.getElementById('timer-days')?.innerText || '0';
+      const hours = document.getElementById('timer-hours')?.innerText || '0';
+      const minutes = document.getElementById('timer-minutes')?.innerText || '0';
+      const seconds = document.getElementById('timer-seconds')?.innerText || '0';
+      return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+    });
+
+    const statusMessage = `Login successful. Time until suspension: ${suspensionTime}`;
+    console.log(statusMessage);
+
+    // 可选：发送 Telegram 消息
+    if (telegramToken && telegramChatId) {
+      const bot = new TelegramBot(telegramToken);
+      await bot.sendMessage(telegramChatId, statusMessage);
+    }
+  } catch (error) {
+    console.error('Error during login and check:', error.message);
+
+    if (telegramToken && telegramChatId) {
+      const bot = new TelegramBot(telegramToken);
+      await bot.sendMessage(telegramChatId, `Login check failed: ${error.message}`);
     }
 
-    statusMessage = `Login successful. Time until suspension: ${suspensionTime}`;
-  } catch (err) {
-    statusMessage = `Login failed: ${err.message}`;
+    process.exitCode = 1; // GitHub Actions 会认为失败
   } finally {
-    if (browser) await browser.close();
-    statusMessage = statusMessage.replace(/[\r\n\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').trim();
-    statusMessage = statusMessage.slice(0, 1000); // 防止超长
-
-    fs.appendFileSync(process.env.GITHUB_ENV, `STATUS=${statusMessage}\n`);
+    await browser.close();
   }
 })();
