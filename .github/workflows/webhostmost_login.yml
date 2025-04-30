@@ -29,9 +29,9 @@ jobs:
 
       - name: Send Status Update (Optional - Adjust as needed)
         if: always() # Run regardless of success/failure above
-        env:
-          STATUS_MESSAGE: $(cat status.txt)  # Set directly in this step
-        run: echo "Status Message: ${{ env.STATUS_MESSAGE }}" #Just output to test
+        run: |
+          STATUS_MESSAGE=$(cat status.txt)  # Set environment variable using shell syntax
+          echo "Status Message: $STATUS_MESSAGE" #Output to test
 
         continue-on-error: true # Don't fail on error (e.g., if sending fails)
 
@@ -40,10 +40,10 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          STATUS_MESSAGE: $(cat status.txt) #Set directly in this step
         run: |
+          STATUS_MESSAGE=$(cat status.txt) # Set environment variable using shell syntax
           if [ -n "${TELEGRAM_BOT_TOKEN}" ] && [ -n "${TELEGRAM_CHAT_ID}" ]; then
-            MESSAGE="${{ env.STATUS_MESSAGE }}"
+            MESSAGE="$STATUS_MESSAGE"
             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               -d chat_id="${TELEGRAM_CHAT_ID}" \
               -d text="$MESSAGE" \
@@ -54,5 +54,5 @@ jobs:
         continue-on-error: true
 
       - name: Output Status
-        run: echo "${{ env.STATUS_MESSAGE }}"
+        run: echo "$STATUS_MESSAGE"
         continue-on-error: true
