@@ -1,5 +1,7 @@
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
+const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
 
 (async () => {
   const username = process.env.WEBHOSTMOST_USERNAME;
@@ -11,7 +13,17 @@ const cheerio = require('cheerio');
   if (!username || !password) {
     console.error('Error: WEBHOSTMOST_USERNAME and WEBHOSTMOST_PASSWORD environment variables must be set.');
     statusMessage = 'Error: Missing credentials.';
-    console.log(`::set-output name=status::${statusMessage}`); // Output immediately
+    //console.log(`::set-output name=status::${statusMessage}`); // Remove set-output
+
+    // Generate a random filename
+    const randomFileName = uuidv4();
+
+    // Write the status to the file
+    fs.writeFileSync(randomFileName, `status=${statusMessage}`);
+
+    // Set the GITHUB_ENV variable
+    console.log(`::set-env name=GITHUB_ENV::$${randomFileName}`);
+
     return;
   }
 
@@ -112,6 +124,15 @@ const cheerio = require('cheerio');
     statusMessage = statusMessage.replace(/[\r\n\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''); // Sanitize
     statusMessage = statusMessage.trim(); // Trim
 
-    console.log(`::set-output name=status::${statusMessage}`); // Output the status
+    //console.log(`::set-output name=status::${statusMessage}`); // Remove set-output
+
+    // Generate a random filename
+    const randomFileName = uuidv4();
+
+    // Write the status to the file
+    fs.writeFileSync(randomFileName, `status=${statusMessage}`);
+
+    // Set the GITHUB_ENV variable
+    console.log(`::set-env name=GITHUB_ENV::$${randomFileName}`);
   }
 })();
