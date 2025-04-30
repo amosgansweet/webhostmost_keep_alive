@@ -1,18 +1,17 @@
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
-const fs = require('fs').promises;
 
 (async () => {
   const username = process.env.WEBHOSTMOST_USERNAME;
   const password = process.env.WEBHOSTMOST_PASSWORD;
   const url = 'https://client.webhostmost.com/login';
   let loginSuccessful = false;
-  let statusMessage = "Webhostmost Status: "; // Initialize here
+  let statusMessage = "Webhostmost Status: ";
 
   if (!username || !password) {
     console.error('Error: WEBHOSTMOST_USERNAME and WEBHOSTMOST_PASSWORD environment variables must be set.');
-    statusMessage = 'Error: Missing credentials.'; // Set status message
-    await fs.writeFile('status.txt', statusMessage);
+    statusMessage = 'Error: Missing credentials.';
+    console.log(`::set-output name=status::${statusMessage}`); // Output immediately
     return;
   }
 
@@ -46,12 +45,10 @@ const fs = require('fs').promises;
     await page.deleteCookie(...await page.cookies());
     await page.setCacheEnabled(false);
 
-    // 1. Go to the login page
     await page.goto(url, { waitUntil: 'networkidle2' });
 
-    // 2. Extract the CSRF token
     const token = await page.evaluate(() => {
-      const tokenInput = document.querySelector('input[name="token"]'); // Adjust selector if needed
+      const tokenInput = document.querySelector('input[name="token"]');
       return tokenInput ? tokenInput.value : null;
     });
 
@@ -59,20 +56,16 @@ const fs = require('fs').promises;
       throw new Error('CSRF token not found.');
     }
 
-    // 3. Fill in the login form and submit
-    await page.type('input[name="username"]', username); // Use name attribute
-    await page.type('input[name="password"]', password); // Use name attribute
+    await page.type('input[name="username"]', username);
+    await page.type('input[name="password"]', password);
 
-    // Construct the form data
     const formData = `token=${token}&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
 
-    // Click the login button (assuming a standard submit button)
     await Promise.all([
       page.evaluate((formData) => {
-        // Create a hidden form and submit it
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '/login';  // Relative URL
+        form.action = '/login';
         form.style.display = 'none';
 
         const params = new URLSearchParams(formData);
@@ -92,13 +85,9 @@ const fs = require('fs').promises;
 
     loginSuccessful = true;
 
-    // 4. Extract the HTML content after login
     const content = await page.content();
-
-    // 5. Use Cheerio to parse the HTML
     const $ = cheerio.load(content);
 
-    // 6. Extract the "Time until suspension"
     let suspensionTime = 'Not Found';
     const suspensionElement = $('div:contains("Time until suspension:")');
 
@@ -111,37 +100,18 @@ const fs = require('fs').promises;
     }
 
     console.log(`Time until suspension: ${suspensionTime}`);
-    statusMessage = `Time until suspension: ${suspensionTime}`; // Update status message
-    await fs.writeFile('status.txt', statusMessage); // Write to file
+    statusMessage = `Login successful. Time until suspension: ${suspensionTime}`;
   } catch (error) {
     loginSuccessful = false;
     console.error('An error occurred:', error);
-    statusMessage = `Error: ${error.message}`; // Update status message
-    await fs.writeFile('status.txt', statusMessage); // Write to file
+    statusMessage = `Login failed: ${error.message}`;
   } finally {
     if (browser) {
       await browser.close();
     }
+    statusMessage = statusMessage.replace(/[\r\n\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''); // Sanitize
+    statusMessage = statusMessage.trim(); // Trim
 
-
-    if (loginSuccessful) {
-      statusMessage = "Webhostmost Status: Login successful. Time until suspension: "; // Reset status message
-      try {
-        const statusFromFile = await fs.readFile('status.txt', 'utf8');
-        statusMessage += statusFromFile;
-      } catch (readError) {
-        statusMessage += "Unknown (Error reading status file)";
-        console.error("Error reading status file:", readError);
-      }
-    } else {
-      statusMessage = "Webhostmost Status: Login failed. Please check your credentials or the website."; // Reset status message
-    }
-
-    try {
-      await fs.writeFile('status.txt', statusMessage);
-      console.log("Final Status Message:", statusMessage);
-    } catch (writeError) {
-      console.error("Error writing final status to file:", writeError);
-    }
+    console.log(`::set-output name=status::${statusMessage}`); // Output the status
   }
 })();
