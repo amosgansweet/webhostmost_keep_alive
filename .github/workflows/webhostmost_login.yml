@@ -1,31 +1,30 @@
-name: WebhostMost Keep Alive
+name: WebHostMost Keep Alive
 
 on:
   schedule:
-    - cron: "0 0 * * *" # 每天 00:00 UTC 执行
+    - cron: '0 6 */2 * *'
   workflow_dispatch:
 
 jobs:
-  keep-alive:
+  login_and_check:
     runs-on: ubuntu-latest
-
-    env:
-      WEBHOSTMOST_USERNAME: ${{ secrets.WEBHOSTMOST_USERNAME }}
-      WEBHOSTMOST_PASSWORD: ${{ secrets.WEBHOSTMOST_PASSWORD }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
-          node-version: 20
+          node-version: '20'
 
       - name: Install dependencies
         run: npm install puppeteer node-telegram-bot-api
 
-      - name: Run check script
+      - name: Run login check script
+        env:
+          WEBHOSTMOST_USERNAME: ${{ secrets.WEBHOSTMOST_USERNAME }}
+          WEBHOSTMOST_PASSWORD: ${{ secrets.WEBHOSTMOST_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: node webhostmost_check.js
