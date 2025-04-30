@@ -90,24 +90,24 @@ const fs = require('fs').promises;
 
     loginSuccessful = true;
 
+    // Add a random delay (between 2 and 5 seconds)
+    const delay = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000; // Random delay between 2 and 5 seconds
+    console.log(`Waiting for ${delay}ms before extracting data...`);
+    await page.waitForTimeout(delay);
+
     // 4. Extract the HTML content after login
     const content = await page.content();
 
     // 5. Use Cheerio to parse the HTML
     const $ = cheerio.load(content);
 
-    // 6. Extract the "Time until suspension"
-    let suspensionTime = 'Not Found';
-    const suspensionElement = $('div:contains("Time until suspension:")');
+    // 6. Extract the "Time until suspension" from the span elements
+    const days = $('#timer-days').text();
+    const hours = $('#timer-hours').text();
+    const minutes = $('#timer-minutes').text();
+    const seconds = $('#timer-seconds').text();
 
-    if (suspensionElement.length > 0) {
-      const fullText = suspensionElement.text();
-      const parts = fullText.split(':');
-      if (parts.length > 1) {
-        suspensionTime = parts[1].trim();
-      }
-    }
-
+    const suspensionTime = `${days}d ${hours}h ${minutes}m ${seconds}s`;
     console.log(`Time until suspension: ${suspensionTime}`);
     await fs.writeFile('status.txt', `Time until suspension: ${suspensionTime}`);
 
