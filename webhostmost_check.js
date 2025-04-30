@@ -1,6 +1,5 @@
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
-const fs = require('fs').promises;  // Import fs.promises
 
 (async () => {
   const username = process.env.WEBHOSTMOST_USERNAME;
@@ -12,8 +11,7 @@ const fs = require('fs').promises;  // Import fs.promises
   if (!username || !password) {
     console.error('Error: WEBHOSTMOST_USERNAME and WEBHOSTMOST_PASSWORD environment variables must be set.');
     statusMessage = 'Error: Missing credentials.';
-    console.log("Status Message (Missing Credentials):", statusMessage); // Log
-    await fs.writeFile('status.txt', statusMessage);  // Write to file AND AWAIT
+    console.log(`::set-output name=status::${statusMessage}`); // Output immediately
     return;
   }
 
@@ -111,11 +109,9 @@ const fs = require('fs').promises;  // Import fs.promises
     if (browser) {
       await browser.close();
     }
-
     statusMessage = statusMessage.replace(/[\r\n\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''); // Sanitize
     statusMessage = statusMessage.trim(); // Trim
 
-    console.log("Status Message (Before Write):", statusMessage); // Log
-    await fs.writeFile('status.txt', statusMessage);  // Write to file AND AWAIT
+    console.log(`::set-output name=status::${statusMessage}`); // Output the status
   }
 })();
