@@ -5,8 +5,8 @@ const fs = require('fs').promises;
 (async () => {
   const username = process.env.WEBHOSTMOST_USERNAME;
   const password = process.env.WEBHOSTMOST_PASSWORD;
-  const url = 'https://client.webhostmost.com/login'; //Corrected URL
-  let loginSuccessful = false; // Track login status
+  const url = 'https://client.webhostmost.com/login';
+  let loginSuccessful = false;
 
   if (!username || !password) {
     console.error('Error: WEBHOSTMOST_USERNAME and WEBHOSTMOST_PASSWORD environment variables must be set.');
@@ -17,25 +17,22 @@ const fs = require('fs').promises;
   let browser;
   try {
     browser = await puppeteer.launch({
-      headless: "new", // Run in headless mode (no GUI)
+      headless: "new",
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-web-security', // Important for bypassing some CORS issues
-        '--disable-features=IsolateOrigins', //Related to web security
-        '--disable-site-isolation-trials', //Related to web security
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins',
+        '--disable-site-isolation-trials',
       ],
-      ignoreDefaultArgs: ['--enable-automation'], // Try to avoid detection
-      // executablePath: '/usr/bin/chromium-browser', // Specify Chromium path if needed in GH Actions
+      ignoreDefaultArgs: ['--enable-automation'],
     });
 
     const page = await browser.newPage();
 
-    //Emulate a real browser as closely as possible
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-    await page.setViewport({ width: 1280, height: 800 }); // Set viewport
+    await page.setViewport({ width: 1280, height: 800 });
     await page.evaluateOnNewDocument(() => {
-      // Pass webdriver check
       Object.defineProperty(navigator, 'webdriver', {
         get: () => false,
       });
@@ -44,23 +41,54 @@ const fs = require('fs').promises;
       'Accept-Language': 'en-US,en;q=0.9',
     });
 
-    // Simulate private browsing (more aggressively)
-    await page.deleteCookie(...await page.cookies()); // Clear all cookies
-    await page.setCacheEnabled(false); // Disable caching
+    await page.deleteCookie(...await page.cookies());
+    await page.setCacheEnabled(false);
 
-    // 1. Go to the login page (Corrected URL)
-    await page.goto(url, { waitUntil: 'networkidle2' }); // Wait for navigation
+    // 1. Go to the login page
+    await page.goto(url, { waitUntil: 'networkidle2' });
 
-    // 2. Fill in the login form (CORRECTED SELECTORS)
-    await page.type('input[placeholder="Email Address"]', username); // Adjust selector if needed
-    await page.type('input[placeholder="Password"]', password); // Adjust selector if needed
-    // 3. Click the login button
+    // 2. Extract the CSRF token
+    const token = await page.evaluate(() => {
+      const tokenInput = document.querySelector('input[name="token"]'); // Adjust selector if needed
+      return tokenInput ? tokenInput.value : null;
+    });
+
+    if (!token) {
+      throw new Error('CSRF token not found.');
+    }
+
+    // 3. Fill in the login form and submit
+    await page.type('input[name="username"]', username); // Use name attribute
+    await page.type('input[name="password"]', password); // Use name attribute
+
+    // Construct the form data
+    const formData = `token=${token}&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+
+    // Click the login button (assuming a standard submit button)
     await Promise.all([
-      page.click('button:contains("Login")'), // Adjust selector if needed
-      page.waitForNavigation({ waitUntil: 'networkidle2' }), // Wait for navigation
+      page.evaluate((formData) => {
+        // Create a hidden form and submit it
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/login';  // Relative URL
+        form.style.display = 'none';
+
+        const params = new URLSearchParams(formData);
+        for (const [key, value] of params) {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = key;
+          input.value = value;
+          form.appendChild(input);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+      }, formData),
+      page.waitForNavigation({ waitUntil: 'networkidle2' }),
     ]);
 
-    loginSuccessful = true; // Login was successful
+    loginSuccessful = true;
 
     // 4. Extract the HTML content after login
     const content = await page.content();
@@ -68,24 +96,23 @@ const fs = require('fs').promises;
     // 5. Use Cheerio to parse the HTML
     const $ = cheerio.load(content);
 
-    // 6. Extract the "Time until suspension" (Adjusted selector to new page)
-      let suspensionTime = 'Not Found';
-      const suspensionElement = $('div:contains("Time until suspension:")');
+    // 6. Extract the "Time until suspension"
+    let suspensionTime = 'Not Found';
+    const suspensionElement = $('div:contains("Time until suspension:")');
 
-      if (suspensionElement.length > 0) {
-        // Extract the text and split it to get the time
-        const fullText = suspensionElement.text();
-        const parts = fullText.split(':');
-        if (parts.length > 1) {
-          suspensionTime = parts[1].trim(); // Get the part after "Time until suspension:"
-        }
+    if (suspensionElement.length > 0) {
+      const fullText = suspensionElement.text();
+      const parts = fullText.split(':');
+      if (parts.length > 1) {
+        suspensionTime = parts[1].trim();
       }
+    }
 
     console.log(`Time until suspension: ${suspensionTime}`);
-    await fs.writeFile('status.txt', `Time until suspension: ${suspensionTime}`);  // Save status to file
+    await fs.writeFile('status.txt', `Time until suspension: ${suspensionTime}`);
 
   } catch (error) {
-    loginSuccessful = false; // Login failed due to an error
+    loginSuccessful = false;
     console.error('An error occurred:', error);
     await fs.writeFile('status.txt', `Error: ${error.message}`);
   } finally {
@@ -93,7 +120,6 @@ const fs = require('fs').promises;
       await browser.close();
     }
 
-    // Construct the status message
     let statusMessage = "Webhostmost Status: ";
     if (loginSuccessful) {
       statusMessage += "Login successful. Time until suspension: ";
@@ -108,13 +134,11 @@ const fs = require('fs').promises;
       statusMessage += "Login failed. Please check your credentials or the website.";
     }
 
-    // Write the final status message to status.txt
     try {
       await fs.writeFile('status.txt', statusMessage);
-      console.log("Final Status Message:", statusMessage);  // Log the message
+      console.log("Final Status Message:", statusMessage);
     } catch (writeError) {
       console.error("Error writing final status to file:", writeError);
     }
-
   }
 })();
