@@ -18,6 +18,9 @@ jobs:
         with:
           node-version: '20.x'
 
+      - name: Uninstall global Puppeteer (if any)
+        run: npm uninstall -g puppeteer
+
       - name: Cache node modules
         id: cache-npm
         uses: actions/cache@v3
@@ -33,13 +36,15 @@ jobs:
         if: ${{ steps.cache-npm.outputs.cache-hit != 'true' }}
         run: |
           npm install puppeteer@latest cheerio
-          echo "Puppeteer version: $(npm list puppeteer)" # Output Puppeteer version
+          echo "PUPPETEER_CACHE_PATH="
+          rm -rf $(npm config get puppeteer_cache_path)
+          echo "Puppeteer version: $(npm list puppeteer)"
 
       - name: Run login and status check script
         env:
           WEBHOSTMOST_USERNAME: ${{ secrets.WEBHOSTMOST_USERNAME }}
           WEBHOSTMOST_PASSWORD: ${{ secrets.WEBHOSTMOST_PASSWORD }}
-        run: node webhostmost_check.js
+        run: node ./webhostmost_check.js
 
       - name: Send Telegram Notification
         env:
