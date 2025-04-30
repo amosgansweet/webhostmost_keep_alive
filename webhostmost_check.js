@@ -6,6 +6,13 @@ const fs = require('fs').promises;
   const username = process.env.WEBHOSTMOST_USERNAME;
   const password = process.env.WEBHOSTMOST_PASSWORD;
   const url = 'https://client.webhostmost.com/login';
+  let loginSuccessful = false;
+
+  if (!username || !password) {
+    console.error('Error: WEBHOSTMOST_USERNAME and WEBHOSTMOST_PASSWORD environment variables must be set.');
+    await fs.writeFile('status.txt', 'Error: Missing credentials.');
+    return;
+  }
 
   let browser;
   try {
@@ -81,10 +88,7 @@ const fs = require('fs').promises;
       page.waitForNavigation({ waitUntil: 'networkidle2' }),
     ]);
 
-    // Add a random delay (between 2 and 5 seconds)
-    const delay = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000; // Random delay between 2 and 5 seconds
-    console.log(`Waiting for ${delay}ms before extracting data...`);
-    await page.waitForTimeout(delay);
+    loginSuccessful = true;
 
     // 4. Extract the HTML content after login
     const content = await page.content();
@@ -92,24 +96,49 @@ const fs = require('fs').promises;
     // 5. Use Cheerio to parse the HTML
     const $ = cheerio.load(content);
 
-    // 6. Extract the "Time until suspension" from the span elements
-    const days = $('#timer-days').text();
-    const hours = $('#timer-hours').text();
-    const minutes = $('#timer-minutes').text();
-    const seconds = $('#timer-seconds').text();
+    // 6. Extract the "Time until suspension"
+    let suspensionTime = 'Not Found';
+    const suspensionElement = $('div:contains("Time until suspension:")');
 
-    const suspensionTime = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+    if (suspensionElement.length > 0) {
+      const fullText = suspensionElement.text();
+      const parts = fullText.split(':');
+      if (parts.length > 1) {
+        suspensionTime = parts[1].trim();
+      }
+    }
+
     console.log(`Time until suspension: ${suspensionTime}`);
-
-    // Write suspensionTime to status.txt
     await fs.writeFile('status.txt', `Time until suspension: ${suspensionTime}`);
 
   } catch (error) {
+    loginSuccessful = false;
     console.error('An error occurred:', error);
     await fs.writeFile('status.txt', `Error: ${error.message}`);
   } finally {
     if (browser) {
       await browser.close();
+    }
+
+    let statusMessage = "Webhostmost Status: ";
+    if (loginSuccessful) {
+      statusMessage += "Login successful. Time until suspension: ";
+      try {
+        const statusFromFile = await fs.readFile('status.txt', 'utf8');
+        statusMessage += statusFromFile;
+      } catch (readError) {
+        statusMessage += "Unknown (Error reading status file)";
+        console.error("Error reading status file:", readError);
+      }
+    } else {
+      statusMessage += "Login failed. Please check your credentials or the website.";
+    }
+
+    try {
+      await fs.writeFile('status.txt', statusMessage);
+      console.log("Final Status Message:", statusMessage);
+    } catch (writeError) {
+      console.error("Error writing final status to file:", writeError);
     }
   }
 })();
