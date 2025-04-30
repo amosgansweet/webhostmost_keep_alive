@@ -1,19 +1,18 @@
 const puppeteer = require('puppeteer'); 
 const cheerio = require('cheerio');
 const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
+const path = require('path');
 
 (async () => {
   const username = process.env.WEBHOSTMOST_USERNAME;
   const password = process.env.WEBHOSTMOST_PASSWORD;
   const url = 'https://client.webhostmost.com/login';
-  let loginSuccessful = false;
   let statusMessage = "Webhostmost Status: ";
 
   if (!username || !password) {
-    console.error('Error: WEBHOSTMOST_USERNAME and WEBHOSTMOST_PASSWORD environment variables must be set.');
     statusMessage = 'Error: Missing credentials.';
-    console.log(`::set-output name=status::${statusMessage}`);
+    console.log(`status=${statusMessage}`); // fallback
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `status=${statusMessage}\n`);
     return;
   }
 
@@ -21,42 +20,23 @@ const { v4: uuidv4 } = require('uuid');
   try {
     browser = await puppeteer.launch({
       headless: "new",
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins',
-        '--disable-site-isolation-trials',
-      ],
-      ignoreDefaultArgs: ['--enable-automation'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
 
     const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-    await page.setViewport({ width: 1280, height: 800 });
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false,
-      });
-    });
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'en-US,en;q=0.9',
-    });
-
+    await page.setUserAgent('Mozilla/5.0');
     await page.goto(url, { waitUntil: 'networkidle2' });
 
     const token = await page.evaluate(() => {
       const tokenInput = document.querySelector('input[name="token"]');
       return tokenInput ? tokenInput.value : null;
     });
-
-    if (!token) throw new Error('CSRF token not found.');
+    if (!token) throw new Error('CSRF token not found');
 
     await page.type('input[name="username"]', username);
     await page.type('input[name="password"]', password);
 
     const formData = `token=${token}&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-
     await Promise.all([
       page.evaluate((formData) => {
         const form = document.createElement('form');
@@ -79,29 +59,23 @@ const { v4: uuidv4 } = require('uuid');
       page.waitForNavigation({ waitUntil: 'networkidle2' }),
     ]);
 
-    loginSuccessful = true;
-
     const content = await page.content();
     const $ = cheerio.load(content);
 
-    let suspensionTime = 'Not Found';
-    const match = content.match(/Time until suspension:\s*([\w\d\s:]+)/i);
-    if (match && match[1]) {
-      suspensionTime = match[1].trim();
-    }
+    let suspensionText = $('*')
+      .filter((i, el) => $(el).text().includes("Time until suspension:"))
+      .first()
+      .text();
+
+    let suspensionTime = suspensionText.split("Time until suspension:")[1]?.trim() || "Not Found";
 
     statusMessage = `Login successful. Time until suspension: ${suspensionTime}`;
-  } catch (error) {
-    loginSuccessful = false;
-    console.error('An error occurred:', error);
-    statusMessage = `Login failed: ${error.message}`;
+  } catch (err) {
+    statusMessage = `Login failed: ${err.message}`;
   } finally {
     if (browser) await browser.close();
-
-    // Sanitize
     statusMessage = statusMessage.replace(/[\r\n\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').trim();
-
-    // 输出为 GitHub Actions 输出变量
-    console.log(`::set-output name=status::${statusMessage}`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `status=${statusMessage}\n`);
+    console.log(`status=${statusMessage}`);
   }
 })();
