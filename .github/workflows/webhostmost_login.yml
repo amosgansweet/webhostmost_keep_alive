@@ -18,9 +18,18 @@ jobs:
         with:
           node-version: '20.x'  # Or a more recent version
 
-      - name: Install dependencies
+      - name: Install dependencies (Force update Puppeteer)
         run: |
-          npm install puppeteer@latest cheerio  # Install the latest version of Puppeteer
+          npm install puppeteer@latest cheerio
+          echo "Puppeteer version: $(npm list puppeteer)" # Output Puppeteer version
+
+      - name: Debug - Output Environment Variables
+        run: |
+          echo "WEBHOSTMOST_USERNAME: $WEBHOSTMOST_USERNAME"
+          echo "WEBHOSTMOST_PASSWORD: $WEBHOSTMOST_PASSWORD"
+        env:
+          WEBHOSTMOST_USERNAME: ${{ secrets.WEBHOSTMOST_USERNAME }}
+          WEBHOSTMOST_PASSWORD: ${{ secrets.WEBHOSTMOST_PASSWORD }}
 
       - name: Run login and status check script
         env:
