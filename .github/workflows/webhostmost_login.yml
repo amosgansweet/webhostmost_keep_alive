@@ -1,46 +1,31 @@
-name: Webhostmost Login and Status Check
+name: WebhostMost Keep Alive
 
 on:
   schedule:
-    - cron: '0 0 */10 * *'
+    - cron: "0 0 * * *" # 每天 00:00 UTC 执行
   workflow_dispatch:
 
 jobs:
-  login_and_check:
+  keep-alive:
     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    env:
+      WEBHOSTMOST_USERNAME: ${{ secrets.WEBHOSTMOST_USERNAME }}
+      WEBHOSTMOST_PASSWORD: ${{ secrets.WEBHOSTMOST_PASSWORD }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: 20
 
       - name: Install dependencies
-        run: npm install puppeteer cheerio uuid
+        run: npm install puppeteer node-telegram-bot-api
 
-      - name: Run login and status check script
-        env:
-          WEBHOSTMOST_USERNAME: ${{ secrets.WEBHOSTMOST_USERNAME }}
-          WEBHOSTMOST_PASSWORD: ${{ secrets.WEBHOSTMOST_PASSWORD }}
+      - name: Run check script
         run: node webhostmost_check.js
-
-      - name: Send Telegram Notification
-        if: always()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-              -d chat_id="${TELEGRAM_CHAT_ID}" \
-              -d text="${STATUS}" \
-              -d disable_web_page_preview="true"
-          else
-            echo "Telegram bot token or chat ID not set. Skipping Telegram notification."
-          fi
-
-      - name: Output Status to Logs
-        run: echo "STATUS=${STATUS}"
