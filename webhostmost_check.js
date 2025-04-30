@@ -90,6 +90,11 @@ const fs = require('fs').promises;
 
     loginSuccessful = true;
 
+    // Add a random delay (between 2 and 5 seconds)
+    const delay = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000; // Random delay between 2 and 5 seconds
+    console.log(`Waiting for ${delay}ms before extracting data...`);
+    await page.waitForTimeout(delay);
+
     // 4. Extract the HTML content after login
     const content = await page.content();
 
@@ -100,16 +105,33 @@ const fs = require('fs').promises;
     let suspensionTime = 'Not Found';
     const suspensionElement = $('div:contains("Time until suspension:")');
 
-    if (suspensionElement.length > 0) {
-      const fullText = suspensionElement.text();
-      const parts = fullText.split(':');
-      if (parts.length > 1) {
-        suspensionTime = parts[1].trim();
-      }
-    }
+    //Find the javascript snippet to calculate remaining time
+    const scriptText = $('script').filter(function() {
+        return $(this).text().includes('var endTime = new Date(Date.now()');
+    }).text();
 
-    console.log(`Time until suspension: ${suspensionTime}`);
-    await fs.writeFile('status.txt', `Time until suspension: ${suspensionTime}`);
+    //Extract the number of days from this script
+    const daysMatch = scriptText.match(/(\d+) \* 24 \* 60 \* 60 \* 1000/);
+    const days = daysMatch ? parseInt(daysMatch[1]) : 45; //Default 45 days
+
+    //Calculate the remaining time
+    const now = new Date();
+    const endTime = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+    // Format the date and time according to the local timezone.
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+        timeZoneName: 'short'
+    });
+
+    const formattedTime = formatter.format(endTime);
+    console.log(`Time until suspension (Local Timezone): ${formattedTime}`);
+    await fs.writeFile('status.txt', `Time until suspension (Local Timezone): ${formattedTime}`);
 
   } catch (error) {
     loginSuccessful = false;
