@@ -11,10 +11,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3  # Downgraded to v3
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3  # Downgraded to v3
         with:
           node-version: '20.x'
 
@@ -25,12 +25,14 @@ jobs:
         env:
           WEBHOSTMOST_USERNAME: ${{ secrets.WEBHOSTMOST_USERNAME }}
           WEBHOSTMOST_PASSWORD: ${{ secrets.WEBHOSTMOST_PASSWORD }}
-        run: node webhostmost_check.js
+        run: node webhostmost_check.js  # Remove continue-on-error temporarily
 
       - name: Send Status Update (Optional - Adjust as needed)
         if: always() # Run regardless of success/failure above
-        run: |
-          echo "STATUS_MESSAGE=$(cat status.txt)" >> $GITHUB_ENV
+        env:
+          STATUS_MESSAGE: $(cat status.txt)  # Set directly in this step
+        run: echo "Status Message: ${{ env.STATUS_MESSAGE }}" #Just output to test
+
         continue-on-error: true # Don't fail on error (e.g., if sending fails)
 
       - name: Send Telegram Notification
@@ -38,6 +40,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          STATUS_MESSAGE: $(cat status.txt) #Set directly in this step
         run: |
           if [ -n "${TELEGRAM_BOT_TOKEN}" ] && [ -n "${TELEGRAM_CHAT_ID}" ]; then
             MESSAGE="${{ env.STATUS_MESSAGE }}"
