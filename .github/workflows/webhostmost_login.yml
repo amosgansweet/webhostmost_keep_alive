@@ -18,9 +18,12 @@ jobs:
         with:
           node-version: '20.x'  # Or a more recent version
 
+      - name: Clean install
+        run: rm -rf node_modules
+
       - name: Install dependencies (Force update Puppeteer)
         run: |
-          npm install puppeteer@latest cheerio
+          npm install puppeteer@22.5.0 cheerio # Or a more recent version
           echo "Puppeteer version: $(npm list puppeteer)" # Output Puppeteer version
 
       - name: Debug - Output Environment Variables
