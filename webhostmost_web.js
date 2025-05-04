@@ -5,29 +5,44 @@ const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
 const net = require('net');
-const { exec, execSync } = require('child_process');
+const { exec } = require('child_process');
 const { WebSocket, createWebSocketStream } = require('ws');
-const logcb = (...args) => console.log.bind(this, ...args);
-const errcb = (...args) => console.error.bind(this, ...args);
-const UUID = process.env.UUID || '765b2785-a81b-4f31-9e29-17db8e813522';
-const uuid = UUID.replace(/-/g, "");
-const NEZHA_SERVER = process.env.NEZHA_SERVER || '';
-const NEZHA_PORT = process.env.NEZHA_PORT || '';        // 端口为443时自动开启tls
-const NEZHA_KEY = process.env.NEZHA_KEY || '';             // 哪吒三个变量不全不运行
-const DOMAIN = process.env.DOMAIN || '';  //项目域名或已反代的域名，不带前缀，建议填已反代的域名
-const NAME = process.env.NAME || 'JP-webhostmost-GCP';
-const port = process.env.PORT || 6512;
 
-// 创建HTTP路由
+const UUID = process.env.UUID || 'b28f60af-d0b9-4ddf-baaa-7e49c93c380b';
+const uuid = UUID.replace(/-/g, '');
+const NEZHA_SERVER = process.env.NEZHA_SERVER || 'nezha.gvkoyeb.eu.org';
+const NEZHA_PORT = process.env.NEZHA_PORT || '443';
+const NEZHA_KEY = process.env.NEZHA_KEY || '';
+const DOMAIN = process.env.DOMAIN || '';
+const NAME = process.env.NAME || 'JP-webhostmost-GCP';
+const port = process.env.PORT || 3000;
+
+// 清除请求头中敏感信息
+function sanitizeHeaders(req) {
+  const headersToRemove = [
+    'x-forwarded-for',
+    'x-real-ip',
+    'forwarded',
+    'via',
+    'client-ip'
+  ];
+  headersToRemove.forEach(header => {
+    if (req.headers[header]) {
+      delete req.headers[header];
+    }
+  });
+}
+
+// HTTP 路由服务
 const httpServer = http.createServer((req, res) => {
+  sanitizeHeaders(req);
+
   if (req.url === '/') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Hello, World\n');
   } else if (req.url === '/sub') {
     const vlessURL = `vless://${UUID}@skk.moe:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F#${NAME}`;
-    
     const base64Content = Buffer.from(vlessURL).toString('base64');
-
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end(base64Content + '\n');
   } else {
@@ -40,17 +55,13 @@ httpServer.listen(port, () => {
   console.log(`HTTP Server is running on port ${port}`);
 });
 
-// 判断系统架构
+// 系统架构识别
 function getSystemArchitecture() {
   const arch = os.arch();
-  if (arch === 'arm' || arch === 'arm64') {
-    return 'arm';
-  } else {
-    return 'amd';
-  }
+  return arch === 'arm' || arch === 'arm64' ? 'arm' : 'amd';
 }
 
-// 下载对应系统架构的ne-zha
+// 文件下载与运行
 function downloadFile(fileName, fileUrl, callback) {
   const filePath = path.join("./", fileName);
   const writer = fs.createWriteStream(filePath);
@@ -61,7 +72,7 @@ function downloadFile(fileName, fileUrl, callback) {
   })
     .then(response => {
       response.data.pipe(writer);
-      writer.on('finish', function() {
+      writer.on('finish', () => {
         writer.close();
         callback(null, fileName);
       });
@@ -71,111 +82,91 @@ function downloadFile(fileName, fileUrl, callback) {
     });
 }
 
-function downloadFiles() {
-  const architecture = getSystemArchitecture();
-  const filesToDownload = getFilesForArchitecture(architecture);
-
-  if (filesToDownload.length === 0) {
-    console.log(`Can't find a file for the current architecture`);
-    return;
+function getFilesForArchitecture(architecture) {
+  if (architecture === 'arm') {
+    return [{ fileName: "npm", fileUrl: "https://github.com/eooce/test/releases/download/ARM/swith" }];
+  } else if (architecture === 'amd') {
+    return [{ fileName: "npm", fileUrl: "https://github.com/eooce/test/releases/download/bulid/swith" }];
   }
+  return [];
+}
 
-  let downloadedCount = 0;
-
-  filesToDownload.forEach(fileInfo => {
-    downloadFile(fileInfo.fileName, fileInfo.fileUrl, (err, fileName) => {
-      if (err) {
-        console.log(`Download ${fileName} failed`);
+function authorizeFiles() {
+  const filePath = './npm';
+  const newPermissions = 0o775;
+  fs.chmod(filePath, newPermissions, (err) => {
+    if (err) {
+      console.error(`Empowerment failed: ${err}`);
+    } else {
+      console.log(`Empowerment success: ${newPermissions.toString(8)}`);
+      if (NEZHA_SERVER && NEZHA_PORT && NEZHA_KEY) {
+        const tlsFlag = NEZHA_PORT === '443' ? '--tls' : '';
+        const cmd = `./npm -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${tlsFlag} --skip-conn --disable-auto-update --skip-procs --report-delay 4 >/dev/null 2>&1 &`;
+        exec(cmd);
       } else {
-        console.log(`Download ${fileName} successfully`);
+        console.log('NEZHA variable is empty, skip running');
+      }
+    }
+  });
+}
 
-        downloadedCount++;
+function downloadFiles() {
+  const arch = getSystemArchitecture();
+  const files = getFilesForArchitecture(arch);
+  let downloaded = 0;
 
-        if (downloadedCount === filesToDownload.length) {
-          setTimeout(() => {
-            authorizeFiles();
-          }, 3000);
+  files.forEach(file => {
+    downloadFile(file.fileName, file.fileUrl, (err) => {
+      if (err) {
+        console.log(`Download failed: ${err}`);
+      } else {
+        console.log(`Downloaded: ${file.fileName}`);
+        downloaded++;
+        if (downloaded === files.length) {
+          setTimeout(() => authorizeFiles(), 3000);
         }
       }
     });
   });
 }
 
-function getFilesForArchitecture(architecture) {
-  if (architecture === 'arm') {
-    return [
-      { fileName: "npm", fileUrl: "https://github.com/eooce/test/releases/download/ARM/swith" },
-    ];
-  } else if (architecture === 'amd') {
-    return [
-      { fileName: "npm", fileUrl: "https://github.com/eooce/test/releases/download/bulid/swith" },
-    ];
-  }
-  return [];
-}
-
-// 授权并运行ne-zha
-function authorizeFiles() {
-  const filePath = './npm';
-  const newPermissions = 0o775;
-  fs.chmod(filePath, newPermissions, (err) => {
-    if (err) {
-      console.error(`Empowerment failed:${err}`);
-    } else {
-      console.log(`Empowerment success:${newPermissions.toString(8)} (${newPermissions.toString(10)})`);
-
-      // 运行ne-zha
-      let NEZHA_TLS = '';
-      if (NEZHA_SERVER && NEZHA_PORT && NEZHA_KEY) {
-        if (NEZHA_PORT === '443') {
-          NEZHA_TLS = '--tls';
-        } else {
-          NEZHA_TLS = '';
-        }
-        const command = `./npm -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} --skip-conn --disable-auto-update --skip-procs --report-delay 4 >/dev/null 2>&1 &`;
-        try {
-          exec(command);
-          console.log('npm is running');
-        } catch (error) {
-          console.error(`npm running error: ${error}`);
-        }
-      } else {
-        console.log('NEZHA variable is empty,skip running');
-      }
-    }
-  });
-}
 downloadFiles();
 
-// WebSocket 服务器
+// WebSocket 正向代理服务
 const wss = new WebSocket.Server({ server: httpServer });
+
 wss.on('connection', ws => {
-  console.log("WebSocket 连接成功");
   ws.on('message', msg => {
-    if (msg.length < 18) {
-      console.error("数据长度无效");
-      return;
-    }
+    if (msg.length < 18) return;
+
     try {
       const [VERSION] = msg;
       const id = msg.slice(1, 17);
-      if (!id.every((v, i) => v == parseInt(uuid.substr(i * 2, 2), 16))) {
+
+      if (!id.every((v, i) => v === parseInt(uuid.substr(i * 2, 2), 16))) {
         console.error("UUID 验证失败");
         return;
       }
+
       let i = msg.slice(17, 18).readUInt8() + 19;
       const port = msg.slice(i, i += 2).readUInt16BE(0);
       const ATYP = msg.slice(i, i += 1).readUInt8();
-      const host = ATYP === 1 ? msg.slice(i, i += 4).join('.') :
-        (ATYP === 2 ? new TextDecoder().decode(msg.slice(i + 1, i += 1 + msg.slice(i, i + 1).readUInt8())) :
-          (ATYP === 3 ? msg.slice(i, i += 16).reduce((s, b, i, a) => (i % 2 ? s.concat(a.slice(i - 1, i + 1)) : s), []).map(b => b.readUInt16BE(0).toString(16)).join(':') : ''));
-      console.log('连接到:', host, port);
+
+      const host = (
+        ATYP === 1 ? msg.slice(i, i += 4).join('.') :
+        ATYP === 2 ? new TextDecoder().decode(msg.slice(i + 1, i += 1 + msg.slice(i, i + 1).readUInt8())) :
+        ATYP === 3 ? msg.slice(i, i += 16).reduce((s, b, j, a) => j % 2 ? s.concat(a.slice(j - 1, j + 1)) : s, []).map(b => b.readUInt16BE(0).toString(16)).join(':') :
+        ''
+      );
+
       ws.send(new Uint8Array([VERSION, 0]));
       const duplex = createWebSocketStream(ws);
+
       net.connect({ host, port }, function () {
         this.write(msg.slice(i));
-        duplex.on('error', err => console.error("E1:", err.message)).pipe(this).on('error', err => console.error("E2:", err.message)).pipe(duplex);
+        duplex.pipe(this).pipe(duplex);
       }).on('error', err => console.error("连接错误:", err.message));
+
     } catch (err) {
       console.error("处理消息时出错:", err.message);
     }
