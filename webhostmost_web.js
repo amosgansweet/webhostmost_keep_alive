@@ -8,14 +8,14 @@ const net = require('net');
 const { exec } = require('child_process');
 const { WebSocket, createWebSocketStream } = require('ws');
 
-const UUID = process.env.UUID || 'b28f60af-d0b9-4ddf-baaa-7e49c93c380b';
+const UUID = process.env.UUID || '373f282a-e11d-4309-b6bd-bb01a6729708';
 const uuid = UUID.replace(/-/g, '');
-const NEZHA_SERVER = process.env.NEZHA_SERVER || 'nezha.gvkoyeb.eu.org';
+const NEZHA_SERVER = process.env.NEZHA_SERVER || '';
 const NEZHA_PORT = process.env.NEZHA_PORT || '443';
 const NEZHA_KEY = process.env.NEZHA_KEY || '';
 const DOMAIN = process.env.DOMAIN || '';
-const NAME = process.env.NAME || 'JP-webhostmost-GCP';
-const port = process.env.PORT || 3000;
+const NAME = process.env.NAME || '';
+const port = process.env.PORT || ;
 
 // 清除请求头中敏感信息
 function sanitizeHeaders(req) {
